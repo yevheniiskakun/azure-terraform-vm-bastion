@@ -73,6 +73,28 @@ resource "tls_private_key" "ssh_key" {
   rsa_bits  = 4096
 }
 
+resource "azurerm_key_vault" "kv" {
+  name                        = "kv-${random_pet.rg_name.id}" # 24 characters max
+  location                    = azurerm_resource_group.rg.location
+  resource_group_name         = azurerm_resource_group.rg.name
+  tenant_id                   = data.azurerm_client_config.current.tenant_id
+  sku_name                    = "standard"
+  purge_protection_enabled    = false
+
+  soft_delete_retention_days = 7
+  enable_rbac_authorization  = true # Recommended: use RBAC for access control
+}
+
+data "azurerm_client_config" "current" {}
+
+# Adding SSH key to use it further in Bastion connection
+resource "azurerm_key_vault_secret" "ssh_private_key" {
+  name         = "ssh-private-key"
+  value        = tls_private_key.ssh_key.private_key_pem
+  key_vault_id = azurerm_key_vault.kv.id
+}
+
+
 # Creating Linux VM
 resource "azurerm_linux_virtual_machine" "vm" {
   name                = "example-vm"
@@ -95,7 +117,7 @@ resource "azurerm_linux_virtual_machine" "vm" {
     storage_account_type = "Standard_LRS"
   }
 
-  source_image_reference {
+  source_image_reference {      # https://az-vm-image.info/
     publisher = "Canonical"
     offer     = "ubuntu-24_04-lts"
     sku       = "server"
